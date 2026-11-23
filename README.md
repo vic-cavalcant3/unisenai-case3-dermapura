@@ -13,3 +13,5 @@ One-page publicada em uma instância **Amazon EC2**, empacotada com **Docker (ng
 | `EC2_HOST` | IP público da EC2 |
 | `EC2_USER` | `ubuntu` |
 | `EC2_SSH_KEY` | conteúdo completo da chave `.pem` |
+
+Feito por Evelyn e Victor
