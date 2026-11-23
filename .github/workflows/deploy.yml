@@ -1,0 +1,61 @@
+name: CI/CD Deploy DermaPura (Case 3)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # ---------- CI: valida o build da imagem antes de publicar ----------
+  build:
+    name: CI - Build e teste da imagem Docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Build da imagem
+        run: docker build -t dermapura-web:${{ github.sha }} .
+
+      - name: Teste - sobe o container e verifica a página
+        run: |
+          docker run -d --name teste -p 8080:80 dermapura-web:${{ github.sha }}
+          sleep 3
+          curl -fsS http://localhost:8080 | grep -q "DermaPura"
+          echo "Página respondeu OK"
+          docker rm -f teste
+
+  # ---------- CD: só roda se o CI passou ----------
+  deploy:
+    name: CD - Deploy na EC2
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Copia os arquivos para a EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "index.html,Dockerfile"
+          target: "~/app"
+          rm: true
+
+      - name: Build e run do Docker na EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo systemctl stop nginx || true
+            sudo systemctl disable nginx || true
+            cd ~/app
+            sudo docker build -t dermapura-web .
+            sudo docker stop dermapura-container || true
+            sudo docker rm dermapura-container || true
+            sudo docker run -d --name dermapura-container --restart always -p 80:80 dermapura-web
+            sudo docker ps --filter name=dermapura-container
